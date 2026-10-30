@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starlight-royale"
+version = "1.0.0"
+description = "A virtual casino for the terminal"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "SavelMoshi"}]
+dependencies = ["textual==8.2.8"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "ruff==0.14.3"]
+
+[project.scripts]
+starlight = "starlight_royale.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
