@@ -2,9 +2,19 @@ import asyncio
 from decimal import Decimal
 
 from textual.widgets import Button, Input
+from textual.css.query import NoMatches
 
 from starlight_royale.app import Casino
 from starlight_royale.persistence import load
+
+
+async def ready(app, pilot, selector, kind):
+    for _ in range(40):
+        try:
+            return app.query_one(selector, kind)
+        except NoMatches:
+            await pilot.pause(0.05)
+    raise AssertionError(f"Control {selector} did not appear")
 
 
 def test_profile_cashier_navigation_and_games(tmp_path, monkeypatch):
@@ -16,22 +26,22 @@ def test_profile_cashier_navigation_and_games(tmp_path, monkeypatch):
         app = Casino(save_file=path)
         async with app.run_test(size=(100, 30)) as pilot:
             assert app.screen_name == "new"
-            app.query_one("#name", Input).value = "Demo"
-            app.query_one("#create", Button).press()
+            (await ready(app, pilot, "#name", Input)).value = "Demo"
+            (await ready(app, pilot, "#create", Button)).press()
             await pilot.pause()
             assert app.screen_name == "lobby"
-            app.query_one("#cashier", Button).press()
+            (await ready(app, pilot, "#cashier", Button)).press()
             await pilot.pause()
-            app.query_one("#amount", Input).value = "10.00"
-            app.query_one("#deposit", Button).press()
+            (await ready(app, pilot, "#amount", Input)).value = "10.00"
+            (await ready(app, pilot, "#deposit", Button)).press()
             await pilot.pause()
             assert app.profile.chips == Decimal("10.00")
             await pilot.press("escape")
             await pilot.pause()
-            app.query_one("#slots", Button).press()
+            (await ready(app, pilot, "#slots", Button)).press()
             await pilot.pause()
-            app.query_one("#amount", Input).value = "1.00"
-            app.query_one("#spin_slots", Button).press()
+            (await ready(app, pilot, "#amount", Input)).value = "1.00"
+            (await ready(app, pilot, "#spin_slots", Button)).press()
             await pilot.pause(0.8)
             assert app.profile.chips == Decimal("29.00")
             assert app.profile.gameplay_net == Decimal("19.00")
@@ -39,8 +49,8 @@ def test_profile_cashier_navigation_and_games(tmp_path, monkeypatch):
             await pilot.press("escape")
             await pilot.press("3")
             await pilot.pause()
-            app.query_one("#amount", Input).value = "1.00"
-            app.query_one("#spin_roulette", Button).press()
+            (await ready(app, pilot, "#amount", Input)).value = "1.00"
+            (await ready(app, pilot, "#spin_roulette", Button)).press()
             await pilot.pause()
             assert "0 green" in app.results["roulette"]
             assert app.profile.chips == Decimal("28.00")
@@ -69,20 +79,20 @@ def test_leaving_slots_during_animation_keeps_result(tmp_path, monkeypatch):
     async def walk():
         app = Casino(save_file=tmp_path / "profile.json")
         async with app.run_test(size=(100, 30)) as pilot:
-            app.query_one("#name", Input).value = "Demo"
-            app.query_one("#create", Button).press()
+            (await ready(app, pilot, "#name", Input)).value = "Demo"
+            (await ready(app, pilot, "#create", Button)).press()
             await pilot.pause()
-            app.query_one("#cashier", Button).press()
+            (await ready(app, pilot, "#cashier", Button)).press()
             await pilot.pause()
-            app.query_one("#amount", Input).value = "5.00"
-            app.query_one("#deposit", Button).press()
+            (await ready(app, pilot, "#amount", Input)).value = "5.00"
+            (await ready(app, pilot, "#deposit", Button)).press()
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()
-            app.query_one("#slots", Button).press()
+            (await ready(app, pilot, "#slots", Button)).press()
             await pilot.pause()
-            app.query_one("#amount", Input).value = "1.00"
-            app.query_one("#spin_slots", Button).press()
+            (await ready(app, pilot, "#amount", Input)).value = "1.00"
+            (await ready(app, pilot, "#spin_slots", Button)).press()
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause(0.2)
@@ -101,7 +111,7 @@ def test_corrupt_save_recovery_preserves_original(tmp_path):
         async with app.run_test(size=(100, 30)) as pilot:
             assert app.screen_name == "recover"
             assert path.read_text() == "broken json"
-            app.query_one("#archive", Button).press()
+            (await ready(app, pilot, "#archive", Button)).press()
             await pilot.pause()
             assert app.screen_name == "new"
             assert not path.exists()
