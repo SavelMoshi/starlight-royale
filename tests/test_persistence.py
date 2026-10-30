@@ -39,6 +39,11 @@ def test_rejects_tampered_balance_and_stats(tmp_path):
     with pytest.raises(SaveError):
         load(path)
     data["cash"] = "25.00"
+    data["stats"]["slots_played"] = 0
+    data["stats"]["slots_won"] = 1
+    path.write_text(json.dumps(data))
+    with pytest.raises(SaveError):
+        load(path)
     data["stats"]["slots_played"] = -1
     path.write_text(json.dumps(data))
     with pytest.raises(SaveError):

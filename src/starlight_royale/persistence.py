@@ -62,6 +62,11 @@ def load(path: Path | None = None) -> Profile:
             or any(type(v) is not int or v < 0 for v in stats.values())
         ):
             raise SaveError("Invalid game statistics.")
+        if any(
+            stats[f"{game}_won"] > stats[f"{game}_played"]
+            for game in ("blackjack", "slots", "roulette")
+        ):
+            raise SaveError("Game wins exceed games played.")
         net = data["gameplay_net"]
         if not isinstance(net, str):
             raise SaveError("Invalid gameplay net.")
