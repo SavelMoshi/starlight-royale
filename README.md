@@ -8,11 +8,13 @@ The interface uses warm gold on deep blue, with a few starlight and frontier det
 
 ## Install once, then launch
 
-Python 3.10 or newer is required. [pipx](https://pipx.pypa.io/stable/installation/) installs this command in its own environment and puts `starlight` on your normal PATH. Run these commands from the cloned project folder.
+Python 3.10 or newer and Git are required. [pipx](https://pipx.pypa.io/stable/installation/) installs this command in its own environment and puts `starlight` on your normal PATH.
 
 **macOS / Linux (Terminal):**
 
 ```sh
+git clone https://github.com/SavelMoshi/starlight-royale.git
+cd starlight-royale
 python3 -m pip install --user pipx
 python3 -m pipx ensurepath
 # Open a new Terminal window after ensurepath.
@@ -23,6 +25,8 @@ starlight
 **Windows CMD:**
 
 ```bat
+git clone https://github.com/SavelMoshi/starlight-royale.git
+cd starlight-royale
 py -m pip install --user pipx
 py -m pipx ensurepath
 REM Open a new CMD window after ensurepath, then return to this folder.
@@ -39,7 +43,7 @@ python -m pip install .
 starlight
 ```
 
-For Windows CMD, replace the first two lines with `py -m venv .venv` and `.venv\Scripts\activate.bat`. A virtual environment must be activated in each new shell; pipx is the route to an everyday `starlight` command without activation. Installation and the console script were verified in a fresh virtual environment on macOS. Windows CMD was configured but could not be run locally.
+For Windows CMD, replace the first two virtual-environment lines with `py -m venv .venv` and `.venv\Scripts\activate.bat`. PowerShell can use the pipx commands above with `py -m`, too. A virtual environment must be activated in each new shell; pipx is the route to an everyday `starlight` command without activation. Installation and the console script were verified in a fresh virtual environment on macOS. Windows CMD was configured but could not be run locally.
 
 ## Controls and first visit
 
