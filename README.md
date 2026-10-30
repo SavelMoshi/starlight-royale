@@ -17,8 +17,8 @@ git clone https://github.com/SavelMoshi/starlight-royale.git
 cd starlight-royale
 python3 -m pip install --user pipx
 python3 -m pipx ensurepath
-# Open a new Terminal window after ensurepath.
 python3 -m pipx install .
+# Open a new Terminal window, then run:
 starlight
 ```
 
@@ -29,8 +29,8 @@ git clone https://github.com/SavelMoshi/starlight-royale.git
 cd starlight-royale
 py -m pip install --user pipx
 py -m pipx ensurepath
-REM Open a new CMD window after ensurepath, then return to this folder.
 py -m pipx install .
+REM Open a new CMD window, then run:
 starlight
 ```
 
