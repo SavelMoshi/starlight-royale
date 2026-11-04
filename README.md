@@ -47,6 +47,28 @@ starlight
 
 For Windows CMD, replace the first two virtual-environment lines with `py -m venv .venv` and `.venv\Scripts\activate.bat`. PowerShell can use the pipx commands above with `py -m`, too. A virtual environment must be activated in each new shell; pipx is the route to an everyday `starlight` command without activation. Installation and the console script were verified in a fresh virtual environment on macOS. Windows CMD was configured but could not be run locally.
 
+### Update an existing installation
+
+`git pull` updates the source checkout but does **not** update a copy already installed by pipx. To replace an older `starlight` installation and make future pipx upgrades follow this public repository, run:
+
+**macOS / Linux:**
+
+```sh
+pipx install --force git+https://github.com/SavelMoshi/starlight-royale.git
+pipx list
+starlight
+```
+
+**Windows CMD:**
+
+```bat
+py -m pipx install --force git+https://github.com/SavelMoshi/starlight-royale.git
+py -m pipx list
+starlight
+```
+
+`pipx list` should show `starlight-royale 1.1.0` or newer. The reinstall does not remove local player saves. If you installed into a virtual environment instead, activate it and run `python -m pip install --upgrade .` from an updated checkout.
+
 ## Controls and first visit
 
 Use **Tab** and **Shift+Tab** to move between controls, **Enter** to activate, **1–7** for lobby destinations, **Esc** for the lobby, and **Q** to quit. On a game screen, **M**, **X**, **L**, and **C** select the minimum, maximum, last, or saved custom wager. Type a custom amount and press **Enter** to save it. Blackjack uses **D** to deal or double, **H** to hit, **S** to stand, and **N** to change wager after a hand. Slots and Roulette use **S** to spin. The slot selector uses **G**, **M**, or **V** to choose a machine and **S** to resume the last one. Shortcuts work when a text input is not focused; Tab and Enter always work.
