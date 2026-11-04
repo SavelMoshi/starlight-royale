@@ -4,7 +4,7 @@ import pytest
 
 from starlight_royale.blackjack import Blackjack, Card, hand_value, shuffled_deck
 from starlight_royale.roulette import Bet, REDS, color
-from starlight_royale.slots import SYMBOLS, multiplier, returned, spin
+from starlight_royale.slots import MACHINES, multiplier, returned, spin
 
 
 def cards(*ranks):
@@ -78,32 +78,30 @@ def test_double_unavailable_after_hit():
     assert not hand.can_double
 
 
-@pytest.mark.parametrize(
-    "reels,multiple",
-    [
-        (("🍒", "🍒", "🍒"), 3),
-        (("🍋", "🍋", "🍋"), 4),
-        (("🔔", "🔔", "🔔"), 6),
-        (("⭐", "⭐", "⭐"), 10),
-        (("💎", "💎", "💎"), 20),
-        (("🍒", "🍒", "⭐"), 2),
-        (("🍋", "🍒", "🍒"), 2),
-        (("🍒", "🍋", "⭐"), 0),
-        (("🍋", "🍋", "⭐"), 0),
-    ],
-)
-def test_slots_payouts(reels, multiple):
-    assert multiplier(reels) == multiple
-    assert returned(Decimal("1.25"), reels) == Decimal("1.25") * multiple
+@pytest.mark.parametrize("machine", MACHINES.values())
+def test_five_reel_slot_payouts(machine):
+    common, other = machine.symbols[:2]
+    for reels, expected in (
+        ((common, common, common, other, other), machine.payouts[0]),
+        ((common, common, common, common, other), machine.payouts[1]),
+        ((common,) * 5, machine.payouts[2]),
+        (("💎",) * 5, machine.jackpot),
+        ((common, common, other, other, machine.symbols[2]), 0),
+    ):
+        assert multiplier(machine, reels) == expected
+        assert returned(machine, Decimal("1.25"), reels) == Decimal("1.25") * expected
+    with pytest.raises(ValueError):
+        multiplier(machine, (common,) * 3)
 
 
 def test_slots_injectable_rng():
     class Fixed:
         def choices(self, symbols, weights, k):
-            assert tuple(symbols) == SYMBOLS and sum(weights) == 100 and k == 3
-            return ["💎"] * 3
+            assert len(symbols) == len(weights) == 5 and sum(weights) == 100 and k == 5
+            return ["💎"] * 5
 
-    assert spin(Fixed()) == ("💎", "💎", "💎")
+    for machine in MACHINES.values():
+        assert spin(machine, Fixed()) == ("💎",) * 5
 
 
 @pytest.mark.parametrize(

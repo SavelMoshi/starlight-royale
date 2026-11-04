@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from .bets import BET_KEYS
 from .money import ZERO, amount
 
 CURRENCIES = {"USD": "$", "EUR": "€", "GBP": "£"}
@@ -24,6 +25,13 @@ class Profile:
         }
     )
     dealer_dialogue: bool = True
+    last_bets: dict[str, str] = field(default_factory=lambda: dict.fromkeys(BET_KEYS, ""))
+    custom_bets: dict[str, str] = field(default_factory=lambda: dict.fromkeys(BET_KEYS, ""))
+    bet_modes: dict[str, str] = field(default_factory=lambda: dict.fromkeys(BET_KEYS, "min"))
+    roulette_choice: str = "red"
+    roulette_number: int = 0
+    slot_machine: str = "gold_rush"
+    color_theme: str = "night_gold"
 
     @property
     def symbol(self) -> str:

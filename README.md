@@ -4,7 +4,9 @@ A terminal casino with three games, a cashier, and a cash-based membership ladde
 
 ![Starlight Royale lobby captured from Textual at 100×30 terminal cells](docs/terminal.svg)
 
-The interface uses warm gold on deep blue, with a few starlight and frontier details. Menus and rules keep text labels beside emoji. Terminal emoji width varies by font; if a symbol looks crowded, its text label and the rules remain readable. A window smaller than 70 columns by 22 rows shows a resize message.
+![Gold Rush slots captured from Textual at 100×30 terminal cells](docs/slots.svg)
+
+The default interface uses warm gold on deep blue, with a few starlight and frontier details. Settings offers ten casino color themes. Menus and rules keep text labels beside emoji. Terminal emoji width varies by font; if a symbol looks crowded, its text label and the rules remain readable. A window smaller than 70 columns by 22 rows shows a resize message.
 
 ## Install once, then launch
 
@@ -47,11 +49,15 @@ For Windows CMD, replace the first two virtual-environment lines with `py -m ven
 
 ## Controls and first visit
 
-Use **Tab** and **Shift+Tab** to move between controls, **Enter** to activate, **1–7** for lobby destinations, **Esc** for the lobby, and **Q** to quit. The Blackjack screen also accepts **H** to hit, **S** to stand, and **D** to double; Slots and Roulette accept **S** to spin when an input is not focused. Available controls appear on screen.
+Use **Tab** and **Shift+Tab** to move between controls, **Enter** to activate, **1–7** for lobby destinations, **Esc** for the lobby, and **Q** to quit. On a game screen, **M**, **X**, **L**, and **C** select the minimum, maximum, last, or saved custom wager. Type a custom amount and press **Enter** to save it. Blackjack uses **D** to deal or double, **H** to hit, **S** to stand, and **N** to change wager after a hand. Slots and Roulette use **S** to spin. The slot selector uses **G**, **M**, or **V** to choose a machine and **S** to resume the last one. Shortcuts work when a text input is not focused; Tab and Enter always work.
 
 Create a display name and choose USD (`$`), EUR (`€`), or GBP (`£`) when the app first opens. This changes the display symbol only; it performs no exchange conversion. You start with **25.00 virtual cash and zero chips**. Visit the **Cashier** and deposit cash into chips before playing.
 
-The cashier transfers at **1 cash = 1 chip**. Deposit moves cash to chips; withdraw moves chips to cash. **Free top-up** adds cash in an amount you choose. Transfers and top-ups do not affect gameplay profit or loss. Amounts must be positive, affordable where applicable, and have no more than two decimal places. Balances use decimal arithmetic and always display two places. Wagers may use any available chip amount; there is no fixed low maximum bet.
+Settings lets you create, switch, edit, and delete up to **five local accounts**. Each has its own balances, game history, saved bets, slot machine, roulette selection, and color theme. Editing can change the display name and currency symbol. Deleting an account requires a confirmation screen and removes its local data. The ten color themes are Night Gold, Sapphire, Emerald, Amethyst, Ruby, Copper, Midnight Teal, Rose Noir, Arctic, and Slate.
+
+The cashier transfers at **1 cash = 1 chip**. Deposit moves cash to chips; withdraw moves chips to cash. **Free top-up** adds cash in an amount you choose. Transfers and top-ups do not affect gameplay profit or loss. Amounts must be positive, affordable where applicable, and have no more than two decimal places. Balances use decimal arithmetic and always display two places.
+
+Each cash level has a wager range. The **minimum** is 0.1% of that level's cash threshold, rounded up to a cent, with a floor of 0.01. The **maximum** is the next level's cash threshold; level 30 allows up to 20,000,000. Available chips may be lower than the level maximum. Blackjack double down must also stay within the level maximum. Moving cash to chips can lower the level and its wager range. The selected wager mode, last actual wager, and custom wager are saved separately for Blackjack, Roulette, and each slot machine.
 
 ## Games and payouts
 
@@ -72,17 +78,15 @@ Hit takes another card. Stand ends your turn and lets the dealer play. Double do
 
 ### Slots 🎰
 
-Three independent reels each use the same weighted symbol distribution. These are weights out of 100 per reel, not balance-dependent odds.
+Choose among three themed machines. Each has **five independent reels**. The weights shown below are out of 100 on each reel. The highest matching symbol count pays; fewer than three matching symbols return **0×**. Five diamonds use the jackpot return. Odds never depend on level or balance.
 
-| Symbol | Name | Weight | Three matching return |
-| --- | --- | ---: | ---: |
-| 🍒 | Cherry | 30 | 3× |
-| 🍋 | Lemon | 25 | 4× |
-| 🔔 | Bell | 20 | 6× |
-| ⭐ | Star | 15 | 10× |
-| 💎 | Diamond | 10 | 20× |
+| Machine | Symbols and weights per reel | 3 match | 4 match | 5 match | 5 💎 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Gold Rush | 🍒 Cherry 30, 🍋 Lemon 25, 🔔 Bell 20, ⭐ Star 15, 💎 Diamond 10 | 2× | 6× | 20× | 50× |
+| Moonlight Saloon | 🌵 Cactus 35, 🐎 Horse 25, 🌙 Moon 18, ⭐ Star 14, 💎 Diamond 8 | 2× | 7× | 25× | 60× |
+| Royal Vault | 🪙 Coin 35, 🔑 Key 28, 💍 Ring 19, 👑 Crown 12, 💎 Diamond 6 | 2× | 8× | 30× | 80× |
 
-Exactly two cherries with a different third symbol return **2×**. Every other result returns **0×**. The brief reel animation is separate from the already selected outcome; it cannot alter the payout.
+The brief reel animation is separate from the selected outcome and cannot alter the payout. The machine, wager choice, and saved custom wager remain selected for the next spin.
 
 ### Roulette 🎡
 
@@ -95,11 +99,11 @@ The European wheel has **0–36**, with one green zero. Place one wager per spin
 | First, second, or third dozen | 1–12, 13–24, or 25–36 | 3× (2:1 profit) |
 | Single number | Exact result, including 0 | 36× (35:1 profit) |
 
-Zero loses on red/black, odd/even, and dozen bets.
+Zero loses on red/black, odd/even, and dozen bets. The chosen bet type, single number, and wager remain selected after a spin and when reopening the app.
 
 ## Cash levels
 
-There are exactly 30 membership levels. **Current cash balance** determines the level. It is not a permanent achievement or a measure of skill. Depositing cash into chips can lower it; withdrawing chips or taking a free top-up can raise it. The bottom bar shows progress from the current threshold to the next. Level 30 shows a full bar.
+There are exactly 30 membership levels. **Current cash balance** determines the level and wager range. It is not a permanent achievement or a measure of skill. Depositing cash into chips can lower it; withdrawing chips or taking a free top-up can raise it. The bottom bar shows progress from the current threshold to the next. Level 30 shows a full bar.
 
 | Level | Rank | Cash threshold | Level | Rank | Cash threshold |
 | ---: | --- | ---: | ---: | --- | ---: |
@@ -121,14 +125,14 @@ There are exactly 30 membership levels. **Current cash balance** determines the 
 
 ## Local save and privacy
 
-The versioned JSON profile stores your display name, currency symbol choice, balances, game counts and wins, gameplay net, and the dealer line setting. It is written atomically after balance changes. No player save belongs in the repository.
+The versioned JSON save stores up to five accounts, the active account, and each account's display name, currency symbol choice, balances, game counts and wins, gameplay net, dealer line setting, wager selections, and color theme. Version 1 and 2 profiles load as a single account and are upgraded on the next save. Saves are written atomically after balance and setting changes. No player save belongs in the repository.
 
 Default save location:
 
 - macOS/Linux: `~/.local/share/starlight-royale/profile.json` (or under `$XDG_DATA_HOME`)
 - Windows: `%APPDATA%\starlight-royale\profile.json`
 
-For testing or a separate profile, set `STARLIGHT_SAVE` to a file path before launch. If loading fails, the app explains the problem and leaves the file intact. The recovery button archives it beside the save before creating a new profile. You can also quit and inspect the JSON yourself. An interrupted Blackjack hand keeps its already debited wager; it counts as a played hand and a loss in gameplay net, while no win is recorded.
+For testing or a separate save, set `STARLIGHT_SAVE` to a file path before launch. If loading fails, the app explains the problem and leaves the file intact. The recovery button archives it beside the save before creating a new account. You can also quit and inspect the JSON yourself. An interrupted Blackjack hand keeps its already debited wager; it counts as a played hand and a loss in gameplay net, while no win is recorded.
 
 ## Development
 
@@ -141,4 +145,4 @@ ruff format --check .
 
 Game rules are in `src/starlight_royale/`, separate from `app.py`. Tests inject fixed decks, reel draws, and wheel results. Production draws use `secrets.SystemRandom`. The GitHub Actions workflow runs tests and Ruff on macOS, Linux, and Windows for Python 3.12 and 3.14. The action major versions follow the official [checkout](https://github.com/actions/checkout/releases) and [setup-python](https://github.com/actions/setup-python/releases) release pages.
 
-**Known limits:** This version has one local profile per save path, one Roulette wager per spin, and no Blackjack split, insurance, or surrender. Dealer dialogue is a small set of written lines that can be turned off in Settings. Ollama dialogue is not implemented. Future improvements could add multiple profile slots, a saved in-progress Blackjack hand, and terminal font presets for different emoji widths.
+**Known limits:** This version has one Roulette wager per spin and no Blackjack split, insurance, or surrender. Dealer dialogue is a small set of written lines that can be turned off in Settings. Ollama dialogue is not implemented. Future improvements could save an in-progress Blackjack hand and add terminal font presets for different emoji widths.
