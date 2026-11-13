@@ -3,7 +3,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.css.query import NoMatches
-from textual.widgets import Button, Input, Select, Static
+from textual.widgets import Button as TextualButton, Input, OptionList, Select, Static
 
 from .accounts import AccountStore, MAX_ACCOUNTS
 from .bets import range_for_cash, selected_bet
@@ -24,6 +24,33 @@ def paragraph(text: str, style: str = "copy") -> Static:
 
 def reel_names(reels: tuple[str, ...]) -> str:
     return "  •  ".join(NAMES[symbol] for symbol in reels)
+
+
+class Button(TextualButton):
+    """Show a clear pointer for keyboard focus and mouse hover."""
+
+    def __init__(self, label: str, **kwargs):
+        self._plain_label = label
+        self._hovered = False
+        super().__init__(label, **kwargs)
+
+    def _show_pointer(self) -> None:
+        pointer = "☞" if self._hovered else "➤" if self.has_focus else " "
+        self.label = f"{pointer} {self._plain_label}"
+
+    def on_focus(self) -> None:
+        self.label = f"{'☞' if self._hovered else '➤'} {self._plain_label}"
+
+    def on_blur(self) -> None:
+        self.label = f"{'☞' if self._hovered else ' '} {self._plain_label}"
+
+    def on_enter(self) -> None:
+        self._hovered = True
+        self._show_pointer()
+
+    def on_leave(self) -> None:
+        self._hovered = False
+        self._show_pointer()
 
 
 class Casino(App):
@@ -49,17 +76,23 @@ class Casino(App):
              background: #202a43; border: round #a88650; height: 3; margin: 0 0 1 0; }
     .reels.moonlight_saloon { color: #a9d8ee; border: round #6a91ad; }
     .reels.royal_vault { color: #e3b7e9; border: round #9a73a7; }
-    .bet-row { height: 1; }
-    .bet-row Button { width: 25; margin: 0 1 0 0; }
+    .bet-row { height: 2; }
+    .bet-row Button { width: 25; margin: 0 2 0 0; }
     .custom-row { height: 3; }
-    .custom-row Button { width: 24; margin: 1 0 0 1; }
+    .custom-row Input { width: 34; }
+    .custom-row Button { width: 22; margin: 1 0 0 1; }
     .tight { margin: 0; }
+    .section { color: #f4c36a; text-style: bold; margin: 1 0; }
+    .table { height: 5; border: round #8e7044; padding: 0 1; margin: 1 0; }
+    .game-action { width: 32; margin: 1 0; text-style: bold; }
+    .account-button { width: 60; }
     Button { width: 36; height: 1; min-height: 1; border: none; margin: 0 0 1 0;
              padding: 0 1; content-align: left middle; background: #253650; color: #f3ead7; }
-    Button:hover, Button:focus { background: #765d38; color: #fff4dd; }
+    Button:hover, Button:focus { background: #765d38; color: #fff4dd; text-style: bold; }
     Input, Select { width: 46; margin: 0 0 1 0; background: #1b2940;
                     border: tall #6f7890; color: #fff4dd; }
-    Input:focus, Select:focus { border: tall #d3aa62; }
+    Input:hover, Select:hover, Input:focus, Select:focus {
+        border: tall #d3aa62; background: #253650; }
     """
         + THEME_CSS
     )
@@ -98,6 +131,16 @@ class Casino(App):
         self.pending_profile = None
         self.corrupt_reason = ""
         self.archived_save = ""
+        self._rendered_screen = None
+        self._focus_after_render = None
+        self.blackjack_frames: list[tuple[int, int, str]] = []
+        self.blackjack_animating = False
+        self.blackjack_frame = (0, 0, "")
+        self.blackjack_profile: Profile | None = None
+        self.blackjack_hand: Blackjack | None = None
+        self.roulette_animating = False
+        self.roulette_frame = 0
+        self.roulette_profile: Profile | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("✦  STARLIGHT ROYALE CASINO  ✦", id="brand", markup=False)
@@ -154,6 +197,12 @@ class Casino(App):
 
     def reset_game_view(self) -> None:
         self.hand = None
+        self.blackjack_animating = False
+        self.blackjack_frames = []
+        self.blackjack_profile = None
+        self.blackjack_hand = None
+        self.roulette_animating = False
+        self.roulette_profile = None
         self.results = {"blackjack": "", "roulette": ""}
         self.result_tones = {"blackjack": "push", "roulette": "push"}
         self.slot_results = dict.fromkeys(MACHINES, "")
@@ -165,7 +214,10 @@ class Casino(App):
             self.query_one("#status", Static).update(
                 "Create a profile to begin • Virtual play only"
             )
-            self.query_one("#progress", Static).update("Cashier: free top-ups and 1:1 transfers")
+            self.query_one("#progress", Static).update(
+                "Cashier: free top-ups and 1:1 transfers\n"
+                "↑↓←→ / WASD move  •  Enter choose  •  Tab leaves text fields"
+            )
             return
         p = self.profile
         level = level_for(p.cash)
@@ -181,7 +233,9 @@ class Casino(App):
             if level.next_threshold is None
             else f"{money(level.threshold, p.symbol)} → {money(level.next_threshold, p.symbol)}"
         )
-        self.query_one("#progress", Static).update(f"Level  [{bar}]  {target}")
+        self.query_one("#progress", Static).update(
+            f"Level  [{bar}]  {target}\n↑↓←→ / WASD move  •  Enter choose  •  Esc lobby"
+        )
 
     def dealer_line(self, kind: str) -> str:
         return line(kind) if self.profile and self.profile.dealer_dialogue else ""
@@ -231,39 +285,61 @@ class Casino(App):
         last_label = money(amount(p.last_bets[key]), p.symbol) if p.last_bets[key] else "—"
         custom_label = money(amount(p.custom_bets[key]), p.symbol) if p.custom_bets[key] else "—"
         return [
+            paragraph("Wager", "section"),
             paragraph(
                 f"Level {level_for(p.cash).number} wager range: "
                 f"{money(bet_range.minimum, p.symbol)}–{money(bet_range.maximum, p.symbol)}. "
-                "M/X/L/C selects; Enter activates buttons.",
+                "Choose a preset or save a custom amount.",
                 "tight",
             ),
             Horizontal(
-                Button(f"Min {money(bet_range.minimum, p.symbol)} [M]", id="bet_min"),
-                Button(f"Max {money(max_available, p.symbol)} [X]", id="bet_max"),
+                Button(
+                    f"Min {money(bet_range.minimum, p.symbol)}",
+                    id="bet_min",
+                    classes="chosen" if p.bet_modes[key] == "min" else "",
+                ),
+                Button(
+                    f"Max {money(max_available, p.symbol)}",
+                    id="bet_max",
+                    classes="chosen" if p.bet_modes[key] == "max" else "",
+                ),
                 classes="bet-row",
             ),
             Horizontal(
-                Button(f"Last {last_label} [L]", id="bet_last", disabled=not p.last_bets[key]),
                 Button(
-                    f"Custom {custom_label} [C]", id="bet_custom", disabled=not p.custom_bets[key]
+                    f"Last {last_label}",
+                    id="bet_last",
+                    disabled=not p.last_bets[key],
+                    classes="chosen" if p.bet_modes[key] == "last" else "",
+                ),
+                Button(
+                    f"Custom {custom_label}",
+                    id="bet_custom",
+                    disabled=not p.custom_bets[key],
+                    classes="chosen" if p.bet_modes[key] == "custom" else "",
                 ),
                 classes="bet-row",
             ),
             Horizontal(
                 Input(value=p.custom_bets[key], placeholder="Custom wager", id="custom_amount"),
-                Button("Save custom [Enter]", id="save_custom"),
+                Button("Save custom", id="save_custom"),
                 classes="custom-row",
             ),
             paragraph(
                 f"Selected {p.bet_modes[key].title()}: "
                 f"{money(selected, p.symbol) if selected is not None else 'unavailable'}"
-                "  •  Cashier [4] for more chips.",
+                "  •  Visit the Cashier for more chips.",
                 "tight",
             ),
         ]
 
     async def render_screen(self) -> None:
         content = self.query_one("#content", VerticalScroll)
+        previous = (
+            self.focused.id
+            if self.focused is not None and self._rendered_screen == self.screen_name
+            else None
+        )
         await content.remove_children()
         widgets = self.build_widgets()
         if self.error:
@@ -273,6 +349,56 @@ class Casino(App):
         await content.mount(*widgets)
         content.scroll_home(animate=False)
         self.update_status()
+        requested_focus = self._focus_after_render
+        self._focus_after_render = None
+        defaults = {
+            "new": "name",
+            "recover": "archive",
+            "lobby": "blackjack",
+            "cashier": "amount",
+            "blackjack": "deal"
+            if self.hand is None
+            else "deal_again"
+            if self.hand.result and not self.blackjack_animating
+            else "hit",
+            "slots_select": "resume_machine",
+            "slots": "spin_slots",
+            "roulette": "bet_type",
+            "settings": "theme_select",
+        }
+        for target in (requested_focus, previous, defaults.get(self.screen_name)):
+            if not target:
+                continue
+            try:
+                widget = content.query_one(f"#{target}")
+                if widget.can_focus and not widget.disabled:
+                    widget.focus()
+                    break
+            except NoMatches:
+                continue
+        self._rendered_screen = self.screen_name
+
+    def blackjack_table(self) -> Static:
+        assert self.hand is not None
+        hand = self.hand
+        if self.blackjack_animating:
+            player_count, dealer_count, _ = self.blackjack_frame
+        else:
+            player_count = len(hand.player)
+            dealer_count = len(hand.dealer) if hand.result else 1
+        player_cards = "  ".join(map(str, hand.player[:player_count])) or "🂠"
+        if dealer_count == 0:
+            dealer_cards, dealer_value = "🂠  🂠", "?"
+        elif dealer_count == 1:
+            dealer_cards, dealer_value = f"{hand.dealer[0]}  🂠", "?"
+        else:
+            dealer_cards = "  ".join(map(str, hand.dealer[:dealer_count]))
+            dealer_value = str(hand_value(hand.dealer[:dealer_count])[0])
+        player_value = str(hand_value(hand.player[:player_count])[0]) if player_count else "?"
+        return paragraph(
+            f"Dealer  {dealer_cards}   ({dealer_value})\nYou     {player_cards}   ({player_value})",
+            "table",
+        )
 
     def build_widgets(self) -> list:
         screen = self.screen_name
@@ -289,6 +415,8 @@ class Casino(App):
                 Select(
                     [("Dollars ($)", "USD"), ("Euros (€)", "EUR"), ("Pounds (£)", "GBP")],
                     value="USD",
+                    allow_blank=False,
+                    type_to_search=False,
                     id="currency",
                 ),
                 Button("Create account", id="create"),
@@ -316,8 +444,7 @@ class Casino(App):
                 paragraph("The lobby", "title"),
                 *([paragraph(intro, "notice")] if intro else []),
                 paragraph(
-                    "Choose a table • Tab/Shift+Tab and Enter, or press 1–7. "
-                    "Esc returns here; Q quits."
+                    "Choose a table with ↑↓ or W/S, then press Enter. Tab and 1–7 also work."
                 ),
                 *[
                     Button(label, id=key)
@@ -386,63 +513,63 @@ class Casino(App):
                 widgets += [
                     paragraph(
                         "Dealer stands on soft 17. Natural 3:2; ordinary win 1:1; "
-                        "push returns stake. No split, insurance, or surrender."
+                        "push returns stake. No split, insurance, or surrender.",
+                        "tight",
+                    ),
+                    Button(
+                        "Deal cards",
+                        id="deal",
+                        disabled=self.bet_amount_or_none("blackjack") is None,
+                        classes="game-action",
                     ),
                     *self.bet_widgets("blackjack"),
-                    Button(
-                        "Deal [D]", id="deal", disabled=self.bet_amount_or_none("blackjack") is None
-                    ),
                 ]
             else:
                 hand = self.hand
-                dealer_cards = (
-                    "  ".join(map(str, hand.dealer)) if hand.result else str(hand.dealer[0]) + "  🂠"
-                )
-                dealer_value = str(hand_value(hand.dealer)[0]) if hand.result else "?"
                 widgets += [
-                    paragraph(f"Dealer: {dealer_cards}   ({dealer_value})"),
-                    paragraph(
-                        f"You:    {'  '.join(map(str, hand.player))}   "
-                        f"({hand_value(hand.player)[0]})"
-                    ),
-                    paragraph(f"Wager: {money(hand.wager, p.symbol)}"),
+                    self.blackjack_table(),
+                    paragraph(f"Wager  {money(hand.wager, p.symbol)}", "tight"),
                 ]
-                if hand.result:
+                if self.blackjack_animating:
+                    widgets.append(paragraph(self.blackjack_frame[2], "notice"))
+                elif hand.result:
                     widgets += [
                         paragraph(self.results["blackjack"], self.result_tones["blackjack"]),
                         Button(
-                            "Deal again [D]",
+                            "Deal again",
                             id="deal_again",
                             disabled=self.bet_amount_or_none("blackjack") is None,
+                            classes="game-action",
                         ),
-                        Button("Change wager [N]", id="new_hand"),
+                        Button("Change wager", id="new_hand"),
                     ]
                 else:
-                    widgets += [Button("Hit [H]", id="hit"), Button("Stand [S]", id="stand")]
+                    widgets += [
+                        Button("Hit", id="hit", classes="game-action"),
+                        Button("Stand", id="stand"),
+                    ]
                     if (
                         hand.can_double
                         and p.chips >= hand.wager
                         and hand.wager * 2 <= range_for_cash(p.cash).maximum
                     ):
-                        widgets.append(Button("Double down [D]", id="double"))
-            widgets.append(Button("← Lobby [Esc]", id="lobby"))
+                        widgets.append(Button("Double down", id="double"))
+            widgets.append(Button("← Lobby", id="lobby"))
             return widgets
         if screen == "slots_select":
             return [
                 paragraph("Choose a slot machine 🎰", "title"),
-                paragraph(
-                    "Five reels on every machine. G/M/V selects a theme; S resumes your last machine."
-                ),
-                Button(f"Resume {MACHINES[p.slot_machine].name} [S]", id="resume_machine"),
+                paragraph("Five reels on every machine. Choose with arrows or WASD, then Enter."),
+                Button(f"Resume {MACHINES[p.slot_machine].name}", id="resume_machine"),
                 *[
                     widget
-                    for machine, shortcut in zip(MACHINES.values(), ("G", "M", "V"))
+                    for machine in MACHINES.values()
                     for widget in (
-                        Button(f"{machine.name} [{shortcut}]", id=f"machine_{machine.key}"),
+                        Button(machine.name, id=f"machine_{machine.key}"),
                         paragraph(machine.tagline),
                     )
                 ],
-                Button("← Lobby [Esc]", id="lobby"),
+                Button("← Lobby", id="lobby"),
             ]
         if screen == "slots":
             machine = MACHINES[p.slot_machine]
@@ -462,24 +589,27 @@ class Casino(App):
                 paragraph(self.slot_results[machine.key], f"{self.slot_tones[machine.key]} tight")
                 if self.slot_results[machine.key]
                 else paragraph("Choose a wager.", "tight"),
-                *self.bet_widgets(machine.key),
                 Button(
-                    "Spin [S]",
+                    "Spin reels",
                     id="spin_slots",
                     disabled=self.spinning or self.bet_amount_or_none(machine.key) is None,
+                    classes="game-action",
                 ),
+                *self.bet_widgets(machine.key),
                 paragraph(reel_names(reels)),
                 paragraph(f"Independent reel weights / 100: {weights}"),
-                Button("Change machine [T]", id="slots_select"),
-                Button("← Lobby [Esc]", id="lobby"),
+                Button("Change machine", id="slots_select"),
+                Button("← Lobby", id="lobby"),
             ]
         if screen == "roulette":
             return [
                 paragraph("Roulette 🎡", "title"),
                 paragraph(
                     "Single zero • one wager per spin. Red/black and odd/even 1:1; "
-                    "dozens 2:1; one number 35:1. Zero loses except a bet on 0."
+                    "dozens 2:1; one number 35:1. Zero loses except a bet on 0.",
+                    "tight",
                 ),
+                paragraph("Choose a bet", "section"),
                 Select(
                     [
                         ("Red", "red"),
@@ -492,23 +622,34 @@ class Casino(App):
                         ("Single number (enter 0–36 below)", "number"),
                     ],
                     value=p.roulette_choice,
+                    allow_blank=False,
+                    type_to_search=False,
                     id="bet_type",
                 ),
-                Input(
-                    value=str(p.roulette_number),
-                    placeholder="Number 0–36, for single-number bet",
-                    id="number",
+                *(
+                    [
+                        Input(
+                            value=str(p.roulette_number),
+                            placeholder="Number 0–36",
+                            id="number",
+                        )
+                    ]
+                    if p.roulette_choice == "number"
+                    else []
+                ),
+                paragraph(f"Wheel turning  {'◴◷◶◵'[self.roulette_frame % 4]}", "notice")
+                if self.roulette_animating
+                else paragraph(self.results["roulette"], self.result_tones["roulette"])
+                if self.results["roulette"]
+                else paragraph("Place a bet.", "tight"),
+                Button(
+                    "Spin wheel",
+                    id="spin_roulette",
+                    disabled=self.roulette_animating or self.bet_amount_or_none("roulette") is None,
+                    classes="game-action",
                 ),
                 *self.bet_widgets("roulette"),
-                Button(
-                    "Spin [S]",
-                    id="spin_roulette",
-                    disabled=self.bet_amount_or_none("roulette") is None,
-                ),
-                paragraph(self.results["roulette"], self.result_tones["roulette"])
-                if self.results["roulette"]
-                else paragraph("Place a bet."),
-                Button("← Lobby [Esc]", id="lobby"),
+                Button("← Lobby", id="lobby"),
             ]
         if screen == "rules":
             machine_rules = [
@@ -567,6 +708,8 @@ class Casino(App):
                 Select(
                     [(palette.name, key) for key, palette in PALETTES.items()],
                     value=p.color_theme,
+                    allow_blank=False,
+                    type_to_search=False,
                     id="theme_select",
                 ),
                 Button(f"Accounts ({len(self.accounts.profiles)}/{MAX_ACCOUNTS})", id="accounts"),
@@ -577,13 +720,14 @@ class Casino(App):
                 paragraph(f"Accounts ({len(self.accounts.profiles)}/{MAX_ACCOUNTS})", "title"),
                 paragraph(
                     "Local accounts have separate balances, stats, wagers, and themes. "
-                    "Tab to an account and press Enter to switch."
+                    "Move to an account and press Enter to switch."
                 ),
                 *[
                     Button(
                         f"{'● ' if index == self.accounts.active else '  '}{profile.name} "
                         f"· {profile.currency} · Level {level_for(profile.cash).number}",
                         id=f"switch_{index}",
+                        classes="account-button",
                     )
                     for index, profile in enumerate(self.accounts.profiles)
                 ],
@@ -604,6 +748,8 @@ class Casino(App):
                 Select(
                     [("Dollars ($)", "USD"), ("Euros (€)", "EUR"), ("Pounds (£)", "GBP")],
                     value=p.currency,
+                    allow_blank=False,
+                    type_to_search=False,
                     id="edit_currency",
                 ),
                 Button("Save changes", id="save_account"),
@@ -629,7 +775,7 @@ class Casino(App):
     def amount_input(self) -> str:
         return self.query_one("#amount", Input).value
 
-    async def finish_hand(self) -> None:
+    async def finish_hand(self, render: bool = True) -> None:
         assert self.profile is not None and self.hand is not None
         hand = self.hand
         change = self.profile.settle(
@@ -645,7 +791,37 @@ class Casino(App):
             f"• change {money(change, self.profile.symbol)}. "
             f"{self.dealer_line('push' if change == 0 else 'win' if change > 0 else 'loss')}"
         )
+        if render:
+            await self.render_screen()
+
+    async def start_blackjack_animation(self, frames: list[tuple[int, int, str]]) -> None:
+        self.blackjack_animating = True
+        self.blackjack_frames = frames[1:]
+        self.blackjack_frame = frames[0]
+        self.blackjack_profile = self.profile
+        self.blackjack_hand = self.hand
         await self.render_screen()
+        self.set_timer(0.23, self.advance_blackjack)
+
+    async def advance_blackjack(self) -> None:
+        if not self.blackjack_animating:
+            return
+        if self.profile is not self.blackjack_profile or self.hand is not self.blackjack_hand:
+            self.blackjack_animating = False
+            self.blackjack_frames = []
+            return
+        if self.blackjack_frames:
+            self.blackjack_frame = self.blackjack_frames.pop(0)
+            if self.screen_name == "blackjack":
+                await self.render_screen()
+            self.set_timer(0.23, self.advance_blackjack)
+            return
+        self.blackjack_animating = False
+        self.blackjack_profile = None
+        self.blackjack_hand = None
+        if self.screen_name == "blackjack":
+            self._focus_after_render = "deal_again" if self.hand.result else "hit"
+            await self.render_screen()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         key = event.button.id
@@ -732,6 +908,15 @@ class Casino(App):
             return
         assert self.profile is not None
         p = self.profile
+        if self.blackjack_animating and key in (
+            "deal",
+            "deal_again",
+            "hit",
+            "stand",
+            "double",
+            "new_hand",
+        ):
+            return
         try:
             if key and key.startswith("machine_"):
                 p.slot_machine = key.removeprefix("machine_")
@@ -750,6 +935,10 @@ class Casino(App):
                 p.custom_bets[bet_key] = str(value)
                 p.bet_modes[bet_key] = "custom"
                 self.persist()
+                self._focus_after_render = {
+                    "blackjack": "deal",
+                    "roulette": "spin_roulette",
+                }.get(self.screen_name, "spin_slots")
                 await self.render_screen()
             elif key in ("deposit", "withdraw", "topup"):
                 value = getattr(p, "top_up" if key == "topup" else key)(self.amount_input())
@@ -762,20 +951,43 @@ class Casino(App):
                 stake = self.wager("blackjack", "blackjack")
                 self.hand = Blackjack(stake)
                 if self.hand.result:
-                    await self.finish_hand()
-                else:
-                    await self.render_screen()
+                    await self.finish_hand(render=False)
+                await self.start_blackjack_animation(
+                    [
+                        (1, 0, "The first card slides across the felt…"),
+                        (1, 1, "The dealer takes a card…"),
+                        (2, 1, "Your hand is in view…"),
+                        (2, 2 if self.hand.result else 1, "Dealer checks the table…"),
+                    ]
+                )
             elif key == "hit":
                 assert self.hand is not None
                 self.hand.hit()
                 if self.hand.result:
-                    await self.finish_hand()
-                else:
-                    await self.render_screen()
+                    await self.finish_hand(render=False)
+                player_count = len(self.hand.player)
+                frames = [
+                    (player_count - 1, 1, "A card comes your way…"),
+                    (player_count, 1, "Card dealt."),
+                ]
+                if self.hand.result:
+                    frames.append((player_count, 2, "The dealer reveals the hole card…"))
+                await self.start_blackjack_animation(frames)
             elif key == "stand":
                 assert self.hand is not None
                 self.hand.stand()
-                await self.finish_hand()
+                await self.finish_hand(render=False)
+                count = len(self.hand.player)
+                await self.start_blackjack_animation(
+                    [
+                        (count, 1, "Dealer turns the hole card…"),
+                        (count, 2, "Dealer checks the total…"),
+                    ]
+                    + [
+                        (count, shown, "Dealer draws another card…")
+                        for shown in range(3, len(self.hand.dealer) + 1)
+                    ]
+                )
             elif key == "double":
                 assert self.hand is not None
                 if not self.hand.can_double:
@@ -785,7 +997,19 @@ class Casino(App):
                 assert extra == self.hand.wager
                 self.persist()
                 self.hand.double_down()
-                await self.finish_hand()
+                await self.finish_hand(render=False)
+                count = len(self.hand.player)
+                await self.start_blackjack_animation(
+                    [
+                        (count - 1, 1, "One card, then the dealer plays…"),
+                        (count, 1, "Your final card lands…"),
+                        (count, 2, "Dealer turns the hole card…"),
+                    ]
+                    + [
+                        (count, shown, "Dealer draws another card…")
+                        for shown in range(3, len(self.hand.dealer) + 1)
+                    ]
+                )
             elif key == "new_hand":
                 self.hand = None
                 self.results["blackjack"] = ""
@@ -814,6 +1038,8 @@ class Casino(App):
                 self.set_timer(0.10, self.animate_slots)
                 await self.render_screen()
             elif key == "spin_roulette":
+                if self.roulette_animating:
+                    return
                 choice = self.query_one("#bet_type", Select).value
                 if choice == "number":
                     raw = self.query_one("#number", Input).value.strip()
@@ -842,6 +1068,10 @@ class Casino(App):
                     f"change {money(change, p.symbol)}. "
                     f"{self.dealer_line('win' if change > 0 else 'loss')}"
                 )
+                self.roulette_animating = True
+                self.roulette_frame = 0
+                self.roulette_profile = p
+                self.set_timer(0.13, self.animate_roulette)
                 await self.render_screen()
         except ValueError as exc:
             await self.show_error(str(exc))
@@ -880,6 +1110,23 @@ class Casino(App):
         if self.screen_name == "slots" and self.profile is p and p.slot_machine == machine.key:
             await self.render_screen()
 
+    async def animate_roulette(self) -> None:
+        if not self.roulette_animating:
+            return
+        if self.profile is not self.roulette_profile:
+            self.roulette_animating = False
+            self.roulette_profile = None
+            return
+        self.roulette_frame += 1
+        if self.roulette_frame < 4:
+            self.set_timer(0.13, self.animate_roulette)
+        else:
+            self.roulette_animating = False
+            self.roulette_profile = None
+            self._focus_after_render = "spin_roulette" if self.screen_name == "roulette" else None
+        if self.screen_name == "roulette":
+            await self.render_screen()
+
     async def action_lobby(self) -> None:
         await self.go_lobby()
 
@@ -911,7 +1158,7 @@ class Casino(App):
         if event.input.id == "custom_amount":
             self.query_one("#save_custom", Button).press()
 
-    def on_select_changed(self, event: Select.Changed) -> None:
+    async def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "theme_select" and self.profile is not None:
             if event.value in PALETTES and self.profile.color_theme != event.value:
                 self.profile.color_theme = str(event.value)
@@ -923,6 +1170,9 @@ class Casino(App):
                 if self.profile.roulette_choice != choice:
                     self.profile.roulette_choice = choice
                     self.persist()
+                    if self.screen_name == "roulette":
+                        self._focus_after_render = "bet_type"
+                        await self.render_screen()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "number" and self.profile is not None:
@@ -931,7 +1181,83 @@ class Casino(App):
                 self.profile.roulette_number = int(raw)
                 self.persist()
 
+    def move_focus(self, direction: str) -> None:
+        content = self.query_one("#content", VerticalScroll)
+        controls = [
+            widget
+            for widget in content.query("Button, Input, Select")
+            if widget.can_focus and widget.display and not widget.disabled
+        ]
+        if not controls:
+            return
+        current = self.focused
+        if current not in controls:
+            controls[0 if direction in ("down", "right") else -1].focus()
+            return
+        center_x = current.region.x + current.region.width / 2
+        center_y = current.region.y + current.region.height / 2
+        if direction in ("left", "right"):
+            row = [
+                widget
+                for widget in controls
+                if abs(widget.region.y + widget.region.height / 2 - center_y) < 1
+            ]
+            if len(row) > 1:
+                row.sort(key=lambda widget: widget.region.x)
+                index = row.index(current)
+                row[(index + (1 if direction == "right" else -1)) % len(row)].focus()
+            else:
+                index = controls.index(current)
+                controls[(index + (1 if direction == "right" else -1)) % len(controls)].focus()
+            return
+        choices = []
+        for widget in controls:
+            if widget is current:
+                continue
+            dx = widget.region.x + widget.region.width / 2 - center_x
+            dy = widget.region.y + widget.region.height / 2 - center_y
+            primary, secondary = (dy, abs(dx)) if direction == "down" else (-dy, abs(dx))
+            if primary > 0:
+                choices.append((primary, secondary, widget))
+        if choices:
+            min(choices, key=lambda item: (item[0], item[1]))[2].focus()
+        else:
+            controls[0 if direction in ("down", "right") else -1].focus()
+
     def on_key(self, event) -> None:
+        directions = {
+            "up": "up",
+            "w": "up",
+            "down": "down",
+            "s": "down",
+            "left": "left",
+            "a": "left",
+            "right": "right",
+            "d": "right",
+        }
+        if event.key in directions:
+            expanded = next(
+                (
+                    selector
+                    for selector in self.query_one("#content", VerticalScroll).query("Select")
+                    if selector.expanded
+                ),
+                None,
+            )
+            if expanded is not None:
+                if event.key in ("w", "s"):
+                    overlay = expanded.query_one(OptionList)
+                    if event.key == "w":
+                        overlay.action_cursor_up()
+                    else:
+                        overlay.action_cursor_down()
+                    event.stop()
+                return
+            if isinstance(self.focused, Input) and event.key not in ("up", "down"):
+                return
+            self.move_focus(directions[event.key])
+            event.stop()
+            return
         if isinstance(self.focused, Input):
             return
         if self.screen_name == "slots_select":
@@ -939,27 +1265,13 @@ class Casino(App):
                 "g": "machine_gold_rush",
                 "m": "machine_moonlight_saloon",
                 "v": "machine_royal_vault",
-                "s": "resume_machine",
             }
         elif self.screen_name in ("blackjack", "slots", "roulette"):
             keys = {"m": "bet_min", "x": "bet_max", "l": "bet_last", "c": "bet_custom"}
             if self.screen_name == "blackjack":
-                keys.update(
-                    {
-                        "d": "deal"
-                        if self.hand is None
-                        else "deal_again"
-                        if self.hand.result
-                        else "double",
-                        "h": "hit",
-                        "s": "stand",
-                        "n": "new_hand",
-                    }
-                )
+                keys.update({"h": "hit", "n": "new_hand"})
             elif self.screen_name == "slots":
-                keys.update({"s": "spin_slots", "t": "slots_select"})
-            else:
-                keys["s"] = "spin_roulette"
+                keys["t"] = "slots_select"
         else:
             return
         if event.key == "c" and self.screen_name in ("blackjack", "slots", "roulette"):

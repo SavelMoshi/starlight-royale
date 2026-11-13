@@ -54,15 +54,20 @@ THEME_CSS = "\n".join(
     Screen.theme_{key} #progress {{ background: {p.surface}; }}
     Screen.theme_{key} #brand {{ border-bottom: solid {p.accent}; }}
     Screen.theme_{key} #status {{ color: {p.accent}; }}
-    Screen.theme_{key} #brand, Screen.theme_{key} .title {{ color: {p.accent}; }}
+    Screen.theme_{key} #brand, Screen.theme_{key} .title,
+    Screen.theme_{key} .section {{ color: {p.accent}; }}
     Screen.theme_{key} .notice, Screen.theme_{key} #progress {{ color: {p.muted}; }}
     Screen.theme_{key} Button {{ background: {p.button}; color: {p.text}; }}
     Screen.theme_{key} Button:hover, Screen.theme_{key} Button:focus
-        {{ background: {p.focus}; color: {p.text}; }}
+        {{ background: {p.focus}; color: {p.text}; text-style: bold; }}
+    Screen.theme_{key} Button.chosen
+        {{ background: {p.focus}; color: {p.text}; text-style: bold; }}
+    Screen.theme_{key} .table {{ border: round {p.accent}; }}
     Screen.theme_{key} Input, Screen.theme_{key} Select
         {{ background: {p.surface}; color: {p.text}; border: tall {p.muted}; }}
+    Screen.theme_{key} Input:hover, Screen.theme_{key} Select:hover,
     Screen.theme_{key} Input:focus, Screen.theme_{key} Select:focus
-        {{ border: tall {p.accent}; }}
+        {{ border: tall {p.accent}; background: {p.button}; }}
     Screen.theme_{key} .reels
         {{ background: {p.surface}; color: {p.accent}; border: round {p.accent}; }}
     Screen.theme_{key} .reels.moonlight_saloon

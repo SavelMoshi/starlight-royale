@@ -2,10 +2,12 @@ import asyncio
 from decimal import Decimal
 
 from textual.css.query import NoMatches
-from textual.widgets import Button, Input, Select
+from textual.widgets import Button, Input, Select, Static
 
 from starlight_royale.app import Casino
-from starlight_royale.persistence import load, load_store
+from starlight_royale.blackjack import Blackjack, Card
+from starlight_royale.persistence import load, load_store, save
+from starlight_royale.wallet import Profile
 
 
 async def ready(app, pilot, selector, kind):
@@ -42,7 +44,7 @@ def test_saved_bets_keyboard_slots_and_roulette(tmp_path, monkeypatch):
             await pilot.press("enter")
             await pilot.pause()
             assert app.profile.custom_bets["royal_vault"] == "1.00"
-            await pilot.press("s")
+            await pilot.press("enter")
             await pilot.pause(0.8)
             assert app.profile.chips == Decimal("89.00")
             assert app.profile.gameplay_net == Decimal("79.00")
@@ -53,13 +55,18 @@ def test_saved_bets_keyboard_slots_and_roulette(tmp_path, monkeypatch):
             await pilot.press("3")
             roulette = await ready(app, pilot, "#bet_type", Select)
             roulette.value = "black"
+            await pilot.pause()
             custom = await ready(app, pilot, "#custom_amount", Input)
             custom.value = "2.00"
             custom.focus()
             await pilot.press("enter")
             await pilot.pause()
-            await pilot.press("s")
-            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            assert app.roulette_animating
+            assert not app.query(".loss")
+            await pilot.pause(0.65)
+            assert not app.roulette_animating
             assert app.profile.roulette_choice == "black"
             assert app.query_one("#bet_type", Select).value == "black"
             assert app.profile.last_bets["roulette"] == "2.00"
@@ -69,7 +76,7 @@ def test_saved_bets_keyboard_slots_and_roulette(tmp_path, monkeypatch):
             await pilot.press("escape")
             await pilot.press("2")
             await ready(app, pilot, "#resume_machine", Button)
-            await pilot.press("s")
+            await pilot.press("enter")
             await ready(app, pilot, "#spin_slots", Button)
             assert app.profile.slot_machine == "royal_vault"
             assert app.profile.bet_modes["royal_vault"] == "custom"
@@ -187,5 +194,99 @@ def test_account_management_and_theme(tmp_path):
             assert app.profile.name == "Second"
             assert not app.screen.has_class("theme_emerald")
             assert len(load_store(path).profiles) == 1
+
+    asyncio.run(walk())
+
+
+def test_directional_navigation_hover_and_select(tmp_path):
+    path = tmp_path / "profile.json"
+    profile = Profile("Demo", "USD")
+    profile.deposit("10.00")
+    save(profile, path)
+
+    async def walk():
+        app = Casino(save_file=path)
+        async with app.run_test(size=(80, 24)) as pilot:
+            assert app.focused.id == "blackjack"
+            assert str(app.focused.label).startswith("➤")
+            await pilot.press("s")
+            assert app.focused.id == "slots_select"
+            await pilot.press("w", "down", "enter")
+            await pilot.pause()
+            assert app.screen_name == "slots_select"
+            await pilot.hover("#machine_gold_rush")
+            assert str(app.query_one("#machine_gold_rush", Button).label).startswith("☞")
+            await pilot.press("down", "enter")
+            await pilot.pause()
+            assert app.screen_name == "slots"
+            assert app.focused.id == "spin_slots"
+            await pilot.press("down")
+            assert app.focused.id == "bet_min"
+            await pilot.press("right")
+            assert app.focused.id == "bet_max"
+            await pilot.press("a")
+            assert app.focused.id == "bet_min"
+            await pilot.press("escape", "3")
+            await pilot.pause()
+            assert app.screen_name == "roulette"
+            await pilot.press("enter", "s", "enter")
+            await pilot.pause()
+            assert app.profile.roulette_choice == "black"
+
+    asyncio.run(walk())
+
+
+def test_blackjack_card_reveal_then_dealer_draw(tmp_path, monkeypatch):
+    path = tmp_path / "profile.json"
+    profile = Profile("Demo", "USD")
+    profile.deposit("10.00")
+    save(profile, path)
+    deck = [Card(rank, "♠") for rank in ("10", "7", "9", "6", "K")]
+    monkeypatch.setattr("starlight_royale.app.Blackjack", lambda wager: Blackjack(wager, deck[:]))
+
+    async def walk():
+        app = Casino(save_file=path)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.screen_name == "blackjack"
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            assert app.blackjack_animating
+            assert app.blackjack_frame[0] == 1
+            assert "🂠" in str(app.query_one(".table", Static).content)
+            assert not app.query(".win")
+            await pilot.press("escape")
+            await pilot.pause(1.1)
+            assert not app.blackjack_animating
+            assert app.screen_name == "lobby"
+            assert app.focused.id == "blackjack"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.focused.id == "hit"
+            await pilot.press("s", "enter")
+            await pilot.pause(0.05)
+            assert app.blackjack_animating
+            assert app.hand.result == "dealer bust"
+            assert app.profile.chips == Decimal("10.01")
+            assert not app.query(".win")
+            await pilot.pause(1.1)
+            assert not app.blackjack_animating
+            assert app.result_tones["blackjack"] == "win"
+            assert app.query_one(".win", Static)
+            assert app.focused.id == "deal_again"
+
+    asyncio.run(walk())
+
+
+def test_wasd_types_normally_in_name_field(tmp_path):
+    async def walk():
+        app = Casino(save_file=tmp_path / "profile.json")
+        async with app.run_test(size=(80, 24)) as pilot:
+            assert app.focused.id == "name"
+            await pilot.press("w", "a", "s", "d")
+            assert app.query_one("#name", Input).value == "wasd"
+            await pilot.press("down")
+            assert app.focused.id == "currency"
 
     asyncio.run(walk())

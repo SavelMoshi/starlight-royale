@@ -6,6 +6,8 @@ A terminal casino with three games, a cashier, and a cash-based membership ladde
 
 ![Gold Rush slots captured from Textual at 100×30 terminal cells](docs/slots.svg)
 
+![Blackjack table captured from Textual at 100×30 terminal cells](docs/blackjack.svg)
+
 The default interface uses warm gold on deep blue, with a few starlight and frontier details. Settings offers ten casino color themes. Menus and rules keep text labels beside emoji. Terminal emoji width varies by font; if a symbol looks crowded, its text label and the rules remain readable. A window smaller than 70 columns by 22 rows shows a resize message.
 
 ## Install once, then launch
@@ -67,11 +69,11 @@ py -m pipx list
 starlight
 ```
 
-`pipx list` should show `starlight-royale 1.1.0` or newer. The reinstall does not remove local player saves. If you installed into a virtual environment instead, activate it and run `python -m pip install --upgrade .` from an updated checkout.
+`pipx list` should show `starlight-royale 1.2.0` or newer. The reinstall does not remove local player saves. If you installed into a virtual environment instead, activate it and run `python -m pip install --upgrade .` from an updated checkout.
 
 ## Controls and first visit
 
-Use **Tab** and **Shift+Tab** to move between controls, **Enter** to activate, **1–7** for lobby destinations, **Esc** for the lobby, and **Q** to quit. On a game screen, **M**, **X**, **L**, and **C** select the minimum, maximum, last, or saved custom wager. Type a custom amount and press **Enter** to save it. Blackjack uses **D** to deal or double, **H** to hit, **S** to stand, and **N** to change wager after a hand. Slots and Roulette use **S** to spin. The slot selector uses **G**, **M**, or **V** to choose a machine and **S** to resume the last one. Shortcuts work when a text input is not focused; Tab and Enter always work.
+Use **↑ ↓ ← →** or **W A S D** to move between controls and **Enter** to choose the focused option. The angled arrow **➤** marks keyboard focus; **☞** marks a button under the mouse. Focused or hovered buttons also change color. **Tab** and **Shift+Tab** still work. **Esc** returns to the lobby, **Q** quits when not typing in a text field, and **1–7** jump to lobby destinations. Text fields accept letters normally; **↑/↓** or Tab moves out of a field, while **←/→** edits text. In a dropdown, use **↑/↓** or **W/S** to choose an option and Enter to confirm it. On game screens, **M**, **X**, **L**, and **C** still select the minimum, maximum, last, or saved custom wager. Type a custom amount and press Enter to save it; focus then moves to the game's main action. Blackjack also supports **H** for Hit and **N** to change wager. The slot selector still supports **G**, **M**, and **V** for its three machines.
 
 Create a display name and choose USD (`$`), EUR (`€`), or GBP (`£`) when the app first opens. This changes the display symbol only; it performs no exchange conversion. You start with **25.00 virtual cash and zero chips**. Visit the **Cashier** and deposit cash into chips before playing.
 
@@ -98,6 +100,8 @@ A shuffled 52-card deck is used for each hand. Number cards are face value, face
 
 Hit takes another card. Stand ends your turn and lets the dealer play. Double down is available only on your first two cards if you can match the wager; it draws exactly one card, then stands. No split, insurance, or surrender. A half-cent from a 3:2 payout is rounded **half up** to the nearest cent.
 
+Cards now appear in a short reveal sequence when dealing or hitting. Standing and doubling reveal the dealer's cards one at a time. The animation changes presentation only; the Blackjack rules decide the outcome, and the balance is saved before the reveal finishes.
+
 ### Slots 🎰
 
 Choose among three themed machines. Each has **five independent reels**. The weights shown below are out of 100 on each reel. The highest matching symbol count pays; fewer than three matching symbols return **0×**. Five diamonds use the jackpot return. Odds never depend on level or balance.
@@ -122,6 +126,8 @@ The European wheel has **0–36**, with one green zero. Place one wager per spin
 | Single number | Exact result, including 0 | 36× (35:1 profit) |
 
 Zero loses on red/black, odd/even, and dozen bets. The chosen bet type, single number, and wager remain selected after a spin and when reopening the app.
+
+The wheel shows a brief visual turn before revealing the result. The spin outcome and payout are calculated independently of that display.
 
 ## Cash levels
 
