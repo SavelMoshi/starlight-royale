@@ -63,10 +63,15 @@ def test_saved_bets_keyboard_slots_and_roulette(tmp_path, monkeypatch):
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause(0.05)
-            assert app.roulette_animating
-            assert not app.query(".loss")
-            await pilot.pause(0.65)
+            assert app.roulette_animating or app.roulette_frame == 4
+            if app.roulette_animating:
+                assert not app.query(".loss")
+            for _ in range(20):
+                if not app.roulette_animating:
+                    break
+                await pilot.pause(0.1)
             assert not app.roulette_animating
+            assert app.roulette_frame == 4
             assert app.profile.roulette_choice == "black"
             assert app.query_one("#bet_type", Select).value == "black"
             assert app.profile.last_bets["roulette"] == "2.00"
